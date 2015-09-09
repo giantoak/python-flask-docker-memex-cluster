@@ -1,4 +1,4 @@
-# Simple Python Flask Dockerized Application#
+# Flask Dockerized Application to analyze clusters of advertisements#
 
 Build the image using the following command
 
