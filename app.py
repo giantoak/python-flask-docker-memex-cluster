@@ -18,6 +18,22 @@ import pandas as pd
 app = Flask(__name__)
 
 
+from elasticsearch import Elasticsearch
+import reverse_geocoder as rg
+from flask import Flask,request,abort
+from flask_restful import Resource, Api
+import json
+from collections import Counter
+import numpy as np
+from itertools import tee, izip
+from geopy.distance import vincenty
+import datetime
+import pandas as pd
+
+
+app = Flask(__name__)
+
+
 def price_quantile(cdfs,city,price):
     temp=filter(lambda x: x['city']==city,cdfs)
     df=temp[0]['data']
@@ -33,10 +49,6 @@ def window(iterable, size):
         for each in iters[i:]:
             next(each, None)
     return izip(*iters)
-
-@app.route('/')
-def home():
-	return "Hello"
 
 @app.route('/cluster_analyze',methods=['POST'])
 def analyze_clusters():
@@ -74,7 +86,7 @@ def analyze_clusters():
 	ethnicity=filter(lambda x: 'ethnicity' in x['_source'].keys(),res['hits']['hits'])
 	ethnicity=map(lambda x: str(x['_source']['ethnicity']),ethnicity)
 	city=filter(lambda x: 'city' in x['_source'].keys(),res['hits']['hits'])
-	city=map(lambda x: str(x['_source']['city']),city)
+	city=map(lambda x: str(x['_source']['city'].encode('ascii', 'ignore')),city)
 	ethnicity_all=dict(Counter(ethnicity))
 	prices=filter(lambda x: 'rate60' in x['_source'].keys() and 'city' in x['_source'].keys(),res['hits']['hits'])
 	prices=filter(lambda x: x['_source']['rate60']!='',prices)
@@ -85,19 +97,20 @@ def analyze_clusters():
 
 	imps=[] #implied travel speed
 	imps2=[] #average distance between multiple posts at exact timestamp
-	for item in window(sorted(time_dist,key=lambda item:item[2]),2):
+	total_ts=sorted(time_dist,key=lambda item:item[2])
+
+	for item in window(total_ts,2):
 	    dist=vincenty((item[0][0],item[0][1]),(item[1][0],item[1][1])).miles
-	    #dist=100
-	    time=abs(item[1][2]-item[0][2]).total_seconds()/3600.00
-	    try:
-	        imps.append(dist/time)
-	    except ZeroDivisionError:
-	        if dist != 0:
+	    time=abs(item[1][2]-item[0][2]).total_seconds()/(24*3600.00)
+	    if dist != 0 and time ==0:
 	            imps2.append(dist)
-	        else:
+	    elif dist!=0 and time !=0:
+	        	imps.append(time)
+	    else:
 	            pass
 
-
+	total_time=abs(total_ts[-1][2]-total_ts[0][2]).total_seconds()/(24*3600.00)
+	avg_post_week=len(total_ts)/(total_time/7.0)
 	if len(ethnicity_all)>1:
 	    eth="More than one"
 	else:
@@ -141,33 +154,33 @@ def analyze_clusters():
 	    }
 	}
 
-	pres = es.search(body=q2,index="memex_ht", doc_type='ad')
-	quantiles=pres['aggregations']['forces']['buckets']
-	df2=pd.DataFrame(quantiles)    
+	# pres = es.search(body=q2,index="memex_ht", doc_type='ad')
+	# quantiles=pres['aggregations']['forces']['buckets']
+	# df2=pd.DataFrame(quantiles)    
 	    
-	hist=[]
-	for i,city in enumerate(df2['key']):
-	   df=pd.DataFrame(dict(df2['prices'][df2['key']==city]).values()[0]['buckets'])
-	   df[['key','doc_count']]=df[['key','doc_count']].astype(float)
-	   df.sort('key',inplace=True)
-	   df['doc_count']=df['doc_count']/df['doc_count'].sum()
-	   norm_cumul = 1.0*np.array(df['doc_count']).cumsum() 
-	   df['quantile']=norm_cumul
-	   hist.append({'city':city,'data':df})
+	# hist=[]
+	# for i,city in enumerate(df2['key']):
+	#    df=pd.DataFrame(dict(df2['prices'][df2['key']==city]).values()[0]['buckets'])
+	#    df[['key','doc_count']]=df[['key','doc_count']].astype(float)
+	#    df.sort('key',inplace=True)
+	#    df['doc_count']=df['doc_count']/df['doc_count'].sum()
+	#    norm_cumul = 1.0*np.array(df['doc_count']).cumsum() 
+	#    df['quantile']=norm_cumul
+	#    hist.append({'city':city,'data':df})
 
 	pq=[]
 	raw=[]
 	for item in map(lambda x:(x['_source']['city'],x['_source']['rate60']),prices):
-	    try:
-	        pq.append(price_quantile(hist,item[0],float(item[1])))
-	        raw.append(float(item[1]))
-	    except:
-	        pass
+	     try:
+	#         pq.append(price_quantile(hist,item[0],float(item[1])))
+	         raw.append(float(item[1]))
+	     except:
+	         pass
 
 
 	return json.dumps({'avg_price_quantile':np.mean(pq),'loc':location,'ethnicity':eth,'price_var':np.std(raw),\
-		'mean_price':np.mean(raw),'implied_speed':np.mean(imps),'avg_dist_sim_posts':np.mean(imps2),'no_cities':len(cities)})
-
+		'mean_price':np.mean(raw),'implied_travel_time':np.mean(imps),'total_time':total_time,'max_dist_sim_posts':np.max(imps2),\
+		'no_cites':len(cities),'avg_post_week':avg_post_week})
 
 
 
