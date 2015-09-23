@@ -6,7 +6,7 @@ from elasticsearch import Elasticsearch
 import reverse_geocoder as rg
 from flask import Flask,request,abort
 from flask_restful import Resource, Api
-import json
+import simplejson as json
 from collections import Counter
 import numpy as np
 from itertools import tee, izip
