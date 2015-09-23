@@ -18,20 +18,20 @@ import pandas as pd
 app = Flask(__name__)
 
 
-from elasticsearch import Elasticsearch
-import reverse_geocoder as rg
-from flask import Flask,request,abort
-from flask_restful import Resource, Api
-import json
-from collections import Counter
-import numpy as np
-from itertools import tee, izip
-from geopy.distance import vincenty
-import datetime
-import pandas as pd
+# from elasticsearch import Elasticsearch
+# import reverse_geocoder as rg
+# from flask import Flask,request,abort
+# from flask_restful import Resource, Api
+# import json
+# from collections import Counter
+# import numpy as np
+# from itertools import tee, izip
+# from geopy.distance import vincenty
+# import datetime
+# import pandas as pd
 
 
-app = Flask(__name__)
+# app = Flask(__name__)
 
 
 def price_quantile(cdfs,city,price):
